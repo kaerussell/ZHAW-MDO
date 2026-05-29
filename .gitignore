@@ -1,0 +1,12 @@
+output/
+*.f5
+*.plt
+*.dat
+*.hst
+*.sql
+*.vsp3
+*.bdf
+__pycache__/
+*.pyc
+*.html
+Old/
