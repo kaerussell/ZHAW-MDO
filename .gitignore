@@ -1,12 +1,5 @@
 output/
-*.f5
-*.plt
-*.dat
-*.hst
-*.sql
-*.vsp3
-*.bdf
+*_out/
 __pycache__/
+.DS_Store
 *.pyc
-*.html
-Old/
