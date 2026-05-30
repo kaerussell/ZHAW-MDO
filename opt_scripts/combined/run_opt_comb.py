@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(DIR, "..", "..", "input_files"))
 import tacs_setup
 
 # ----------------------- General ---------------------------- #
-maxiter = 300
+maxiter = 150
 
 VSP_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.vsp3")
 BDF_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.bdf")
@@ -149,10 +149,18 @@ class Top(Multipoint):
 
         # Additive Formulierung
         self.add_subsystem("obj", om.ExecComp(
-            "D_M_obj = wing_mass / M_REF + D / D_REF",
+            "D_M_obj = beta*(wing_mass / M_REF) + ((1-beta) * D / D_REF)",
             wing_mass=M_INIT, D=D_INIT,
-            M_REF=M_REF_UNIT, D_REF=D_REF_UNIT
+            M_REF=M_REF_UNIT, D_REF=D_REF_UNIT,
+            beta=0.7
         ), promotes=["*"])
+
+        # Breguet-Proxy Objective:
+        # self.add_subsystem("obj", om.ExecComp(
+        #     "D_M_obj = D + wing_mass * g / LD_ref",
+        #     D=D_INIT, wing_mass=M_INIT,
+        #     g=G, LD_ref=LD_TARGET
+        # ), promotes=["*"])
 
 
 # ----------------------- Connect ---------------------------- #
@@ -216,42 +224,44 @@ prob.driver.opt_settings = {"MAXIT": maxiter}
 # pyOptSparse history file (for OptView)
 prob.driver.options["hist_file"] = os.path.join(OUTPUT_DIR, "opthist.hst")
 
-# SQL-History file
-# sql_file = os.path.join(OUTPUT_DIR, "opt_history.sql")
-# recorder = om.SqliteRecorder(sql_file)
+
 
 # Recording Options
 prob.driver.recording_options["record_objectives"] = True
 prob.driver.recording_options["record_constraints"] = True
 prob.driver.recording_options["record_desvars"] = True
 
-# prob.driver.add_recorder(recorder)
+# SQL-History file
+# sql_file = os.path.join(OUTPUT_DIR, "opt_history.sql")
+# recorder = om.SqliteRecorder(sql_file)
+
+# prob.model.add_recorder(recorder)
+# prob.model.recording_options["record_outputs"] = True
+# prob.model.recording_options["includes"] = ["cruise.mass", "cruise.D"]
 
 # Add Designvariables
-prob.model.add_design_var("dv_struct", lower=0.001, upper=0.2, scaler=100.0)
+prob.model.add_design_var("dv_struct", lower=0.001, upper=0.05, scaler=100.0)
 prob.model.add_design_var("aoa_cruise",   lower=1.0, upper=5.0,  scaler=1/AOA_CRUISE)
 prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=10.0, scaler=1/AOA_MAN)
 
-prob.model.add_design_var("Wing:XSec_1:Twist", lower=-5.0, upper=5.0)
+prob.model.add_design_var("Wing:XSec_1:Twist", lower=-2.0, upper=5.0)
 prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=4.0, upper=8.0, scaler=1.0/7.7)
 prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=0.5, upper=5, scaler=1.0/1.7)
 prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=20.0, scaler=1.0/18)
 prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=0.5, upper=5, scaler=1.0/1.7)
-prob.model.add_design_var("Wing:XSec_2:Twist", lower=-5.0, upper=5.0)
+prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0)
 prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
 prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=20.0, scaler=1.0/18)
 
-prob.model.add_objective("D_M_obj", scaler=1/100)
+prob.model.add_objective("D_M_obj", scaler=1/60) # 1/50 - 1/100 for addition, 1.0 for multiplication, 1/D_INIT for breguet
 
 # Add constraints 
 prob.model.add_constraint("maneuver.ks_vmfailure", upper=1.0, scaler=1.0)
 prob.model.add_constraint("cruise.L", equals=L_CRUISE, scaler=1/L_CRUISE)
 prob.model.add_constraint("maneuver.L", equals=L_MAN, scaler=1/L_MAN)
-# for comp in ["U_SKIN", "L_SKIN", "F_SPAR", "R_SPAR"]:
-#     prob.model.add_constraint(f"cruise.adjacency.{comp}", lower=-1e-3, upper=1e-3, scaler=1e3, linear=True)
+for comp in ["U_SKIN", "L_SKIN", "F_SPAR", "R_SPAR"]:
+    prob.model.add_constraint(f"cruise.adjacency.{comp}", lower=-1e-3, upper=1e-3, scaler=1e3, linear=True)
 # prob.model.add_constraint("cruise.Wing.S_ref", lower=60, upper=220.0, scaler=1/S_REF)
-
-
 
 prob.setup(mode="rev")
 om.n2(prob, show_browser=False, outfile=os.path.join(OUTPUT_DIR, "n2.html"))
@@ -306,10 +316,10 @@ print("=" * 55)
 
 # Output-geometrien schreiben
 dvgeo_internal = prob.model.dvgeo.nom_getDVGeo()
-dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "cruise_cd_out.vsp3"))
+dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "comb_out.vsp3"))
 
 print("\n" + "=" * 65)
-print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise D")
+print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise, Maneuver Mass-Drag-Combined ")
 print("=" * 65)
 print(f"  Strukturmasse              : {prob.get_val('cruise.mass')[0]:>10.2f}  kg")
 print(f"  Auftriebskraft             : {prob.get_val('cruise.L')[0]:>10.2f}  N")

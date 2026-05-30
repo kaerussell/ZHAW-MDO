@@ -214,12 +214,12 @@ prob.model.add_design_var("dv_struct", lower=0.001, upper=0.2, scaler=100.0)
 prob.model.add_design_var("aoa_cruise",   lower=-5.0, upper=5.0,  scaler=1/AOA_CRUISE)
 prob.model.add_design_var("aoa_maneuver", lower= 0.0, upper=10.0, scaler=1/AOA_MAN)
 
-prob.model.add_design_var("Wing:XSec_1:Twist", lower=-5.0, upper=5.0)
+prob.model.add_design_var("Wing:XSec_1:Twist", lower=-2.0, upper=5.0)
 prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=4.0, upper=8.0, scaler=1.0/7.7)
 prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=0.5, upper=5, scaler=1.0/1.7)
 prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=20.0, scaler=1.0/18)
 prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=0.5, upper=5, scaler=1.0/1.7)
-prob.model.add_design_var("Wing:XSec_2:Twist", lower=-5.0, upper=5.0)
+prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0)
 prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
 prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=20.0, scaler=1.0/18)
 
@@ -229,8 +229,8 @@ prob.model.add_objective("cruise.D", scaler=1/D_REF)
 prob.model.add_constraint("maneuver.ks_vmfailure", upper=1.0, scaler=1.0)
 prob.model.add_constraint("cruise.L", equals=L_CRUISE, scaler=1/L_CRUISE)
 prob.model.add_constraint("maneuver.L", equals=L_MAN, scaler=1/L_MAN)
-# for comp in ["U_SKIN", "L_SKIN", "F_SPAR", "R_SPAR"]:
-#     prob.model.add_constraint(f"cruise.adjacency.{comp}", lower=-1e-3, upper=1e-3, scaler=1e3, linear=True)
+for comp in ["U_SKIN", "L_SKIN", "F_SPAR", "R_SPAR"]:
+    prob.model.add_constraint(f"cruise.adjacency.{comp}", lower=-1e-3, upper=1e-3, scaler=1e3, linear=True)
 # prob.model.add_constraint("cruise.Wing.S_ref", lower=60, upper=220.0, scaler=1/S_REF)
 
 
@@ -291,7 +291,7 @@ dvgeo_internal = prob.model.dvgeo.nom_getDVGeo()
 dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "drag_opt_out.vsp3"))
 
 print("\n" + "=" * 65)
-print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise D")
+print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise, Maneuver Drag")
 print("=" * 65)
 print(f"  Strukturmasse              : {prob.get_val('cruise.mass')[0]:>10.2f}  kg")
 print(f"  Auftriebskraft             : {prob.get_val('cruise.L')[0]:>10.2f}  N")
