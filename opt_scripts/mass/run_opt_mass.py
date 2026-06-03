@@ -117,7 +117,7 @@ class Top(Multipoint):
         dvs.add_output(MPhysVariables.Aerodynamics.FlowConditions.REYNOLDS_NUMBER, val=RE, units="1/m")
         dvs.add_output("rho", val=RHO, units="kg/m**3")
         dvs.add_output("v",   val=V,   units="m/s")
-        dvs.add_output("dv_struct", np.full(ndv_struct, 0.01))
+        dvs.add_output("dv_struct", np.full(ndv_struct, 0.002))
 
         # Szenario + Solver definieren
         for scenario in ["cruise", "maneuver"]: # , "maneuver"
@@ -207,10 +207,9 @@ prob.driver.recording_options["record_desvars"] = True
 # prob.driver.add_recorder(recorder)
 
 # Add Designvariables
-# ndv_struct = 107 
-# lower, upper = tacs_setup.get_dv_bounds(ndv_struct)
-# prob.model.add_design_var("dv_struct", lower=lower, upper=upper, scaler=100.0)
-prob.model.add_design_var("dv_struct", lower=0.001, upper=0.05, scaler=100.0)
+ndv_struct = 102
+lower, upper = tacs_setup.get_dv_bounds(ndv_struct)
+prob.model.add_design_var("dv_struct", lower=lower, upper=upper, scaler=100.0)
 prob.model.add_design_var("aoa_cruise",   lower=1.0, upper=5.0,  scaler=1/AOA_CRUISE)
 prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=12.0, scaler=1/AOA_MAN)
 
