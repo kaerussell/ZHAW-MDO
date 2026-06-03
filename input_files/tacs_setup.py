@@ -138,3 +138,28 @@ def constraint_setup(scenario_name, fea_assembler, constraint_list):
         compIDs = fea_assembler.selectCompIDs(include="STRUT")
         constr.addConstraint("STRUT", compIDs=compIDs)
         constraint_list.append(constr)
+
+def get_dv_bounds(ndv):
+    """Returns lower/upper bounds based on known component order from BDF."""
+    # Indices aus bekanntem Mapping (aus results.txt)
+    rib_idx   = list(range(0, 20)) + [61, 62]
+    l_skin_idx = list(range(20, 40)) + [104]
+    r_spar_idx = list(range(40, 61))
+    f_spar_idx = list(range(63, 84))
+    u_skin_idx = list(range(84, 106))
+    strut_idx  = [106]
+
+    lower = np.full(ndv, 0.001)
+    upper = np.full(ndv, 0.050)
+
+    for i in rib_idx:
+        upper[i] = 0.025
+    for i in l_skin_idx + u_skin_idx:
+        upper[i] = 0.025  # oder 0.010 wenn du strikt bleiben willst
+    for i in r_spar_idx + f_spar_idx:
+        lower[i] = 0.002
+        upper[i] = 0.050
+    for i in strut_idx:
+        upper[i] = 0.025
+
+    return lower, upper

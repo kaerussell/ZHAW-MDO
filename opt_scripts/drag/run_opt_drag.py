@@ -210,18 +210,20 @@ prob.driver.recording_options["record_desvars"] = True
 # prob.driver.add_recorder(recorder)
 
 # Add Designvariables
-prob.model.add_design_var("dv_struct", lower=0.001, upper=0.2, scaler=100.0)
-prob.model.add_design_var("aoa_cruise",   lower=-5.0, upper=5.0,  scaler=1/AOA_CRUISE)
-prob.model.add_design_var("aoa_maneuver", lower= 0.0, upper=10.0, scaler=1/AOA_MAN)
+ndv_struct = 107 
+lower, upper = tacs_setup.get_dv_bounds(ndv_struct)
+prob.model.add_design_var("dv_struct", lower=lower, upper=upper, scaler=100.0)
+prob.model.add_design_var("aoa_cruise",   lower=1.0, upper=5.0,  scaler=1/AOA_CRUISE)
+prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=12.0, scaler=1/AOA_MAN)
 
-prob.model.add_design_var("Wing:XSec_1:Twist", lower=-2.0, upper=5.0)
-prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=4.0, upper=8.0, scaler=1.0/7.7)
-prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=0.5, upper=5, scaler=1.0/1.7)
-prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=20.0, scaler=1.0/18)
-prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=0.5, upper=5, scaler=1.0/1.7)
-prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0)
+prob.model.add_design_var("Wing:XSec_1:Twist", lower=-2.0, upper=5.0, scaler=1/5)
+prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=5.0, upper=8.0, scaler=1.0/7.7)
+prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/1.7)
+prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=20.0, scaler=1.0/9.5)
+prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=1.5, upper=3.0, scaler=1.0/1.7)
+prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0, scaler=1/5)
 prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
-prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=20.0, scaler=1.0/18)
+prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=20.0, scaler=1.0/9.5)
 
 prob.model.add_objective("cruise.D", scaler=1/D_REF)
 
