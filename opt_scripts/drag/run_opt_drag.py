@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(DIR, "..", "..", "input_files"))
 import tacs_setup
 
 # ----------------------- General ---------------------------- #
-maxiter = 250
+maxiter = 500
 
 VSP_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.vsp3")
 BDF_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.bdf")
@@ -120,7 +120,7 @@ class Top(Multipoint):
         dvs.add_output(MPhysVariables.Aerodynamics.FlowConditions.REYNOLDS_NUMBER, val=RE, units="1/m")
         dvs.add_output("rho", val=RHO, units="kg/m**3")
         dvs.add_output("v",   val=V,   units="m/s")
-        dvs.add_output("dv_struct", np.full(ndv_struct, 0.01))
+        dvs.add_output("dv_struct", np.full(ndv_struct, 0.002))
 
         # Szenario + Solver definieren
         for scenario in ["cruise", "maneuver"]: # , "maneuver"
@@ -210,20 +210,20 @@ prob.driver.recording_options["record_desvars"] = True
 # prob.driver.add_recorder(recorder)
 
 # Add Designvariables
-ndv_struct = 107 
+ndv_struct = 102
 lower, upper = tacs_setup.get_dv_bounds(ndv_struct)
 prob.model.add_design_var("dv_struct", lower=lower, upper=upper, scaler=100.0)
 prob.model.add_design_var("aoa_cruise",   lower=1.0, upper=5.0,  scaler=1/AOA_CRUISE)
 prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=12.0, scaler=1/AOA_MAN)
 
 prob.model.add_design_var("Wing:XSec_1:Twist", lower=-2.0, upper=5.0, scaler=1/5)
-prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=5.0, upper=8.0, scaler=1.0/7.7)
-prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/1.7)
-prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=20.0, scaler=1.0/9.5)
-prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=1.5, upper=3.0, scaler=1.0/1.7)
+prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=6.0, upper=8.0, scaler=1.0/7.7)
+# prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/4)
+# prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
+prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=1.0, upper=3.0, scaler=1.0/1.7)
 prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0, scaler=1/5)
 prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
-prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=20.0, scaler=1.0/9.5)
+prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
 
 prob.model.add_objective("cruise.D", scaler=1/D_REF)
 

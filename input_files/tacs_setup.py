@@ -151,13 +151,12 @@ def get_dv_bounds(ndv):
     upper = np.full(ndv, 0.050)
 
     for i in rib_idx:
-        upper[i] = 0.025
+        upper[i] = 0.030
     for i in l_skin_idx + u_skin_idx:
         upper[i] = 0.025
     for i in f_spar_idx + r_spar_idx:
-        lower[i] = 0.002
         upper[i] = 0.050
     for i in strut_idx:
-        upper[i] = 0.025
+        upper[i] = 0.030
 
     return lower, upper

@@ -15,9 +15,8 @@ DIR        = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(DIR, "..", "..", "input_files"))
 import tacs_setup
 
-
 # ----------------------- General ---------------------------- #
-maxiter = 500
+maxiter = 10
 
 VSP_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.vsp3")
 BDF_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.bdf")
@@ -36,9 +35,6 @@ AOA_CRUISE = 3.0        # deg
 AOA_MAN    = 8.0        # deg
 YAW   = 0.0             # deg
 
-LD_TARGET = 25
-CDREF   = 0.06
-
 M_GROSS    = 65770.8    # B737-800 gross mass
 G          = 9.81       # gravitational
 W_GROSS    = M_GROSS*G  # gross weight N
@@ -47,6 +43,17 @@ L_MAN      = 2.5*W_GROSS    # Lift constraint
 S_REF      = 130        # m^2 (of B737-800)
 T_OVER_C   = 0.12
 M_REF      = 3500       # kg reference wing weight
+
+LD_TARGET = 30
+
+CDREF   = 0.06
+D_REF   = L_CRUISE/LD_TARGET
+M_REF = 1000 # KG
+M_REF_UNIT = 50 # kg
+D_REF_UNIT = 1000  # N
+
+M_INIT = 3500 # kg
+D_INIT = 28000 # N
 
 # ----------------------- Multipoint ---------------------------- #
 class Top(Multipoint):
@@ -92,8 +99,6 @@ class Top(Multipoint):
         aero_builder.initialize(self.comm)
         self.add_subsystem("mesh_aero", aero_builder.get_mesh_coordinate_subsystem())
 
-        # self.add_subsystem("ld_ratio", om.ExecComp("LD = L / D"))
-
         struct_builder = TacsBuilder(
             mesh_file=BDF_FILE,
             element_callback=tacs_setup.element_callback,
@@ -118,6 +123,8 @@ class Top(Multipoint):
         dvs.add_output("rho", val=RHO, units="kg/m**3")
         dvs.add_output("v",   val=V,   units="m/s")
         dvs.add_output("dv_struct", np.full(ndv_struct, 0.002))
+        dvs.add_output("Wing:XSec_1:Twist", val=0.0, units="deg")
+        dvs.add_output("Wing:XSec_2:Twist", val=0.0, units="deg")
 
         # Szenario + Solver definieren
         for scenario in ["cruise", "maneuver"]: # , "maneuver"
@@ -137,6 +144,36 @@ class Top(Multipoint):
                 linear_solver,
             )
 
+        # Multiplikative Formulierung
+        # self.add_subsystem("obj", om.ExecComp(
+        #     "D_M_obj = (wing_mass / M_REF) * (D / D_REF)",
+        #     wing_mass=M_REF, D=D_REF,
+        #     M_REF=M_REF, D_REF=D_REF
+        # ), promotes=["*"])
+
+        # Additive Formulierung
+        self.add_subsystem("obj", om.ExecComp(
+            "D_M_obj = beta*(wing_mass / M_REF) + ((1-beta) * D / D_REF)",
+            wing_mass=M_INIT, D=D_INIT,
+            M_REF=M_REF, D_REF=D_REF,
+            beta=0.1
+        ), promotes=["*"])
+
+        # Breguet-Proxy Objective:
+        # self.add_subsystem("obj", om.ExecComp(
+        #     "D_M_obj = D + wing_mass * g / LD_ref",
+        #     D=D_INIT, wing_mass=M_INIT,
+        #     g=G, LD_ref=LD_TARGET
+        # ), promotes=["*"])
+
+
+        # Stall limit AoA
+        self.add_subsystem("aoa_total", om.ExecComp(
+            "aoa_total_man = aoa_maneuver + twist_inner + twist_outer",
+            aoa_maneuver=AOA_MAN, twist_inner =0.0, twist_outer=0.0
+        ), promotes=["*"])
+
+
 # ----------------------- Connect ---------------------------- #
 
         self.connect(f"mesh_aero.{MPhysVariables.Aerodynamics.Surface.Mesh.COORDINATES}",MPhysVariables.Aerodynamics.Surface.Geometry.COORDINATES_INPUT,)
@@ -145,6 +182,11 @@ class Top(Multipoint):
         self.connect("aoa_cruise",   f"cruise.{MPhysVariables.Aerodynamics.FlowConditions.ANGLE_OF_ATTACK}")
         self.connect("aoa_maneuver", f"maneuver.{MPhysVariables.Aerodynamics.FlowConditions.ANGLE_OF_ATTACK}")
 
+        self.connect("cruise.mass", "wing_mass")
+        self.connect("cruise.D",    "D")
+
+        self.connect("Wing:XSec_1:Twist", "twist_inner")
+        self.connect("Wing:XSec_2:Twist", "twist_outer")
 
         for scenario in ["cruise", "maneuver"]: #, "maneuver"
             self.connect("x_aero0_geometry_output", f"{scenario}.{MPhysVariables.Aerodynamics.Surface.COORDINATES_INITIAL}",)
@@ -172,6 +214,7 @@ class Top(Multipoint):
         #     system.coupling.linear_solver.precon = om.LinearBlockGS(maxiter=3)
 
         self.dvgeo.nom_addVSPVariable("Wing", "XSec_1", "Twist", scaledStep=False, dh=1e-3,)
+        self.dvgeo.nom_addVSPVariable("Wing", "XSec_1", "Span", scaledStep=False, dh=1e-3)
         self.dvgeo.nom_addVSPVariable("Wing", "XSec_1", "Root_Chord", scaledStep=False, dh=1e-3,)
         self.dvgeo.nom_addVSPVariable("Wing", "XSec_1", "Tip_Chord", scaledStep=False, dh=1e-3,)
         self.dvgeo.nom_addVSPVariable("Wing", "XSec_1", "Sweep", scaledStep=False, dh=1e-3,)
@@ -190,52 +233,56 @@ prob.driver = om.pyOptSparseDriver()
 prob.driver.options["debug_print"] = ["nl_cons", "objs", "desvars"]
 prob.driver.options["optimizer"] = "SLSQP"
 prob.driver.opt_settings = {"MAXIT": maxiter}
-# prob.driver.declare_coloring()
 
 # pyOptSparse history file (for OptView)
 prob.driver.options["hist_file"] = os.path.join(OUTPUT_DIR, "opthist.hst")
 
-# SQL-History file
-# sql_file = os.path.join(OUTPUT_DIR, "opt_history.sql")
-# recorder = om.SqliteRecorder(sql_file)
+
 
 # Recording Options
 prob.driver.recording_options["record_objectives"] = True
 prob.driver.recording_options["record_constraints"] = True
 prob.driver.recording_options["record_desvars"] = True
 
-# prob.driver.add_recorder(recorder)
+# SQL-History file
+# SQL-History file
+sql_file = os.path.join(OUTPUT_DIR, "opt_history.sql")
+recorder = om.SqliteRecorder(sql_file)
+prob.driver.add_recorder(recorder)
+prob.driver.recording_options["includes"] = ["cruise.mass", "cruise.D"]
 
 # Add Designvariables
-ndv_struct = 102
+ndv_struct = 102 
 lower, upper = tacs_setup.get_dv_bounds(ndv_struct)
 prob.model.add_design_var("dv_struct", lower=lower, upper=upper, scaler=100.0)
 prob.model.add_design_var("aoa_cruise",   lower=1.0, upper=5.0,  scaler=1/AOA_CRUISE)
 prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=12.0, scaler=1/AOA_MAN)
 
-prob.model.add_design_var("Wing:XSec_1:Twist", lower=0.0, upper=5.0, scaler=1/5)
-prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=6.0, upper=8.0, scaler=1.0/7.7)
-prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/4)
-prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
-prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=1.0, upper=3.0, scaler=1.0/1.7)
-prob.model.add_design_var("Wing:XSec_2:Twist", lower=0.0, upper=5.0, scaler=1/5)
-prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
-prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
+# prob.model.add_design_var("Wing:XSec_1:Twist", lower=-2.0, upper=5.0, scaler=1/5)
+# prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=5.0, upper=8.0, scaler=1.0/7.7)
+# prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/4)
+# prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
+# prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=1.0, upper=3.0, scaler=1.0/1.7)
+# prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0, scaler=1/5)
+# prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
+# prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
 
-prob.model.add_objective("cruise.mass", scaler=1/M_REF)
+prob.model.add_objective("cruise.mass", scaler=1/1500.0) # 1/50 - 1/100 for addition, 1.0 for multiplication, 1/D_INIT for breguet
 
-# Add constraints 
+# Add constraints
+prob.model.add_constraint("aoa_total_man", upper=14.0, scaler=1/14.0) 
 prob.model.add_constraint("maneuver.ks_vmfailure", upper=1.0, scaler=1.0)
 prob.model.add_constraint("cruise.L", equals=L_CRUISE, scaler=1/L_CRUISE)
 prob.model.add_constraint("maneuver.L", equals=L_MAN, scaler=1/L_MAN)
 for comp in ["U_SKIN", "L_SKIN", "F_SPAR", "R_SPAR"]:
-    prob.model.add_constraint(f"cruise.adjacency.{comp}", lower=-1e-3, upper=1e-3, scaler=1e3, linear=True)
+    prob.model.add_constraint(f"cruise.adjacency.{comp}", lower=-2.5e-3, upper=2.5e-3, scaler=1e3, linear=True)
 # prob.model.add_constraint("cruise.Wing.S_ref", lower=60, upper=220.0, scaler=1/S_REF)
-
-
 
 prob.setup(mode="rev")
 om.n2(prob, show_browser=False, outfile=os.path.join(OUTPUT_DIR, "n2.html"))
+
+assert len(prob.get_val("dv_struct")) == ndv_struct, \
+    f"ndv_struct stimmt nicht! – Indizes in get_dv_bounds prüfen!"
 
 for scenario in ["cruise", "maneuver"]: #, "maneuver"
     system = getattr(prob.model, scenario)
@@ -251,6 +298,7 @@ for scenario in ["cruise", "maneuver"]:
 
 prob.run_driver()
 # prob.run_model()
+prob.cleanup()
 
 # data = prob.check_partials(
 #     compact_print=True,
@@ -287,45 +335,9 @@ print("=" * 55)
 
 # Output-geometrien schreiben
 dvgeo_internal = prob.model.dvgeo.nom_getDVGeo()
-dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "mass_opt_out.vsp3"))
+dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "comb_out.vsp3"))
 
-print("\n" + "=" * 65)
-print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise, Maneuver Mass")
-print("=" * 65)
-print(f"  Strukturmasse              : {prob.get_val('cruise.mass')[0]:>10.2f}  kg")
-print(f"  Auftriebskraft             : {prob.get_val('cruise.L')[0]:>10.2f}  N")
-print(f"  S_ref                      : {prob.get_val('cruise.Wing.S_ref')[0]:>10.2f}  m^2")
-print(f"  Luftwiderstand             : {prob.get_val('cruise.D')[0]:>10.2f}  N")
-print(f"  CL                         : {prob.get_val('cruise.CL')[0]:>10.4f}  ")
-print(f"  CD                         : {prob.get_val('cruise.CD')[0]:>10.4f}  ")
-print(f"  Wing CD visc               : {prob.get_val('cruise.aero_post.Wing.CDv')[0]:>10.4f}  ")
-print(f"  Wing CD ind                : {prob.get_val('cruise.aero_post.Wing.CDi')[0]:>10.4f}  ")
-print(f"  Strut CD visc              : {prob.get_val('cruise.aero_post.Strut.CDv')[0]:>10.4f}  ")
-print(f"  Strut CD ind               : {prob.get_val('cruise.aero_post.Strut.CDi')[0]:>10.4f}  ")
-Total_L = prob.get_val('cruise.L')[0]
-Total_D = prob.get_val('cruise.D')[0]
-print(f"  Total L/D                  : {Total_L/Total_D:>10.3f}")
-print(f"  Wing Lift                  : {prob.get_val('cruise.aero_post.Wing.L')}")
-print(f"  Strut Lift                 : {prob.get_val('cruise.aero_post.Strut.L')}")
-print(f"  Cruise Lift                : {prob.get_val('cruise.L')}")
-print(f"  KS-Failure                 : {prob.get_val('cruise.ks_vmfailure')[0]:>10.4f}  (≤ 1.0)")
-print(f"  AoA Cruise                 : {prob.get_val('aoa_cruise')[0]:>10.3f}  deg")
-print(f"  AoA Maneuver               : {prob.get_val('aoa_maneuver')[0]:>10.3f}  deg")
-print(f"  Wing Twist inner           : {prob.get_val('Wing:XSec_1:Twist')[0]:>10.3f}  deg")
-print(f"  Wing Twist outer           : {prob.get_val('Wing:XSec_2:Twist')[0]:>10.3f}  deg")
-# inner_span = prob.get_val('Wing:XSec_1:Span')[0]
-# outer_span = prob.get_val('Wing:XSec_2:Span')[0]
-# print(f"  Wing Span (Halb)           : {inner_span+outer_span:>10.3f}  m")
-print(f"  Wing Chord (Root)          : {prob.get_val('Wing:XSec_1:Root_Chord')[0]:>10.3f}  m")
-print(f"  Wing Chord (Tip)           : {prob.get_val('Wing:XSec_2:Tip_Chord')[0]:>10.3f}  m")
-
-dv = prob.get_val("dv_struct")
-print(f"  Dicken  min / max / mean   :  {dv.min():.4f} / {dv.max():.4f} / {dv.mean():.4f}  m")
-print("=" * 65)
-print(f"  N2-Diagram  : {os.path.join(OUTPUT_DIR, 'n2.html')}")
-
-# prob.model.list_outputs()
-
+# Results in .txt file festhalten
 output_file = os.path.join(OUTPUT_DIR, "results.txt")
 with open(output_file, "w") as f:
     # Standard outputs
@@ -342,3 +354,40 @@ with open(output_file, "w") as f:
     dv_names = fea_assembler.getCompNames()
     for i, (name, val) in enumerate(zip(dv_names, dv_values)):
         f.write(f"  [{i:3d}] {name:<35} {val*1000:6.2f} mm\n")
+
+inner_span = prob.get_val("Wing:XSec_1:Span")[0]
+outer_span = prob.get_val("Wing:XSec_2:Span")[0]
+Total_L = prob.get_val('cruise.L')[0]
+Total_D = prob.get_val('cruise.D')[0]
+
+print("\n" + "=" * 65)
+print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise, Maneuver Mass-Drag-Combined ")
+print("=" * 65)
+print(f"  Strukturmasse              : {prob.get_val('cruise.mass')[0]:>10.2f}  kg")
+print(f"  Auftriebskraft             : {prob.get_val('cruise.L')[0]:>10.2f}  N")
+print(f"  S_ref                      : {prob.get_val('cruise.Wing.S_ref')[0]:>10.2f}  m^2")
+print(f"  Total Drag                 : {prob.get_val('cruise.D')[0]:>10.2f}  N")
+print(f"  CL                         : {prob.get_val('cruise.CL')[0]:>10.4f}  ")
+print(f"  CD                         : {prob.get_val('cruise.CD')[0]:>10.4f}  ")
+print(f"  Wing CD visc               : {prob.get_val('cruise.aero_post.Wing.CDv')[0]:>10.4f}  ")
+print(f"  Wing CD ind                : {prob.get_val('cruise.aero_post.Wing.CDi')[0]:>10.4f}  ")
+print(f"  Strut CD visc              : {prob.get_val('cruise.aero_post.Strut.CDv')[0]:>10.4f}  ")
+print(f"  Strut CD ind               : {prob.get_val('cruise.aero_post.Strut.CDi')[0]:>10.4f}  ")
+print(f"  Total L/D                  : {Total_L/Total_D:>10.3f}")
+print(f"  Wing Lift                  : {prob.get_val('cruise.aero_post.Wing.L')}")
+print(f"  Strut Lift                 : {prob.get_val('cruise.aero_post.Strut.L')}")
+print(f"  Cruise Lift                : {prob.get_val('cruise.L')}")
+print(f"  KS-Failure                 : {prob.get_val('cruise.ks_vmfailure')[0]:>10.4f}  (≤ 1.0)")
+print(f"  AoA Cruise                 : {prob.get_val('aoa_cruise')[0]:>10.3f}  deg")
+print(f"  AoA Maneuver               : {prob.get_val('aoa_maneuver')[0]:>10.3f}  deg")
+print(f"  Wing Twist inner           : {prob.get_val('Wing:XSec_1:Twist')[0]:>10.3f}  deg")
+print(f"  Wing Twist outer           : {prob.get_val('Wing:XSec_2:Twist')[0]:>10.3f}  deg")
+print(f"  Wing Span (Halb)           : {inner_span+outer_span:>10.3f}  m")
+print(f"  Wing Chord (Root)          : {prob.get_val('Wing:XSec_1:Root_Chord')[0]:>10.3f}  m")
+print(f"  Wing Chord (Tip)           : {prob.get_val('Wing:XSec_2:Tip_Chord')[0]:>10.3f}  m")
+dv = prob.get_val("dv_struct")
+print(f"  Dicken  min / max / mean   :  {dv.min():.4f} / {dv.max():.4f} / {dv.mean():.4f}  m")
+print("=" * 65)
+print(f"  N2-Diagram  : {os.path.join(OUTPUT_DIR, 'n2.html')}")
+
+# prob.model.list_outputs()
