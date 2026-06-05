@@ -5,7 +5,7 @@ from matplotlib.widgets import Slider
 import os
 
 # Alle .dat Dateien finden
-dat_files = sorted(glob.glob("opt_scripts/combined/output/vlm_out/**/*.dat", recursive=True))
+dat_files = sorted(glob.glob("opt_scripts/baseline/output/vlm_out/**/cruise*.dat", recursive=True))
 
 # Nur Lift-Distribution Dateien (nicht alle .dat)
 lift_files = [f for f in dat_files if "lift" in f.lower()]

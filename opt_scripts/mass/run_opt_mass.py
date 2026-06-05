@@ -215,11 +215,11 @@ prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=12.0, scaler=1/AOA_M
 
 prob.model.add_design_var("Wing:XSec_1:Twist", lower=0.0, upper=5.0, scaler=1/5)
 prob.model.add_design_var("Wing:XSec_1:Root_Chord",  lower=6.0, upper=8.0, scaler=1.0/7.7)
-prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/4)
-prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
+# prob.model.add_design_var("Wing:XSec_1:Tip_Chord",  lower=3.0, upper=5.0, scaler=1.0/4)
+# prob.model.add_design_var("Wing:XSec_1:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
 prob.model.add_design_var("Wing:XSec_2:Tip_Chord",  lower=1.0, upper=3.0, scaler=1.0/1.7)
 prob.model.add_design_var("Wing:XSec_2:Twist", lower=0.0, upper=5.0, scaler=1/5)
-prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
+prob.model.add_design_var("Wing:XSec_2:Span",  lower=3.0, upper=20.0, scaler=1.0/5)
 prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
 
 prob.model.add_objective("cruise.mass", scaler=1/M_REF)
@@ -328,13 +328,30 @@ print(f"  N2-Diagram  : {os.path.join(OUTPUT_DIR, 'n2.html')}")
 
 output_file = os.path.join(OUTPUT_DIR, "results.txt")
 with open(output_file, "w") as f:
-    # Standard outputs
     old_stdout = sys.stdout
     sys.stdout = f
+
+    # Vollständige Modell-Outputs (wie gehabt)
     prob.model.list_outputs()
+
+    # --- ALLE Design-Variablen zwingend auflisten ---
+    print("\n" + "=" * 60)
+    print("ALLE DESIGN-VARIABLEN (vom Treiber registriert)")
+    print("=" * 60)
+    dv_meta = prob.model.get_design_vars(recurse=True)
+    for name in sorted(dv_meta):
+        val = prob.get_val(name)
+        arr = np.atleast_1d(val)
+        if arr.size == 1:
+            print(f"  {name:<35} {arr[0]: .6f}")
+        else:
+            print(f"  {name:<35} size={arr.size:<4}  "
+                  f"min={arr.min(): .4f}  max={arr.max(): .4f}  mean={arr.mean(): .4f}")
+    print("=" * 60)
+
     sys.stdout = old_stdout
-    
-    # Strukturdicken mit Namen
+
+    # Strukturdicken mit Namen (wie gehabt)
     f.write("\n" + "=" * 55 + "\n")
     f.write("STRUKTURDICKEN – TACS Property Mapping\n")
     f.write("=" * 55 + "\n")

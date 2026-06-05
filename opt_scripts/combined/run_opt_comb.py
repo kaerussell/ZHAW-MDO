@@ -268,7 +268,7 @@ prob.model.add_design_var("Wing:XSec_2:Twist", lower=-2.0, upper=5.0, scaler=1/5
 prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
 prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
 
-prob.model.add_objective("D_M_obj", scaler=1.0) # 1/50 - 1/100 for addition, 1.0 for multiplication, 1/D_INIT for breguet
+prob.model.add_objective("D_M_obj", scaler=1.0) # 1.0 for addition, 1.0 for multiplication, 1/D_INIT for breguet
 
 # Add constraints
 prob.model.add_constraint("aoa_total_man", upper=14.0, scaler=1/14.0) 
@@ -341,13 +341,30 @@ dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "comb_out.vsp3"))
 # Results in .txt file festhalten
 output_file = os.path.join(OUTPUT_DIR, "results.txt")
 with open(output_file, "w") as f:
-    # Standard outputs
     old_stdout = sys.stdout
     sys.stdout = f
+
+    # Vollständige Modell-Outputs (wie gehabt)
     prob.model.list_outputs()
+
+    # --- ALLE Design-Variablen zwingend auflisten ---
+    print("\n" + "=" * 60)
+    print("ALLE DESIGN-VARIABLEN (vom Treiber registriert)")
+    print("=" * 60)
+    dv_meta = prob.model.get_design_vars(recurse=True)
+    for name in sorted(dv_meta):
+        val = prob.get_val(name)
+        arr = np.atleast_1d(val)
+        if arr.size == 1:
+            print(f"  {name:<35} {arr[0]: .6f}")
+        else:
+            print(f"  {name:<35} size={arr.size:<4}  "
+                  f"min={arr.min(): .4f}  max={arr.max(): .4f}  mean={arr.mean(): .4f}")
+    print("=" * 60)
+
     sys.stdout = old_stdout
-    
-    # Strukturdicken mit Namen
+
+    # Strukturdicken mit Namen (wie gehabt)
     f.write("\n" + "=" * 55 + "\n")
     f.write("STRUKTURDICKEN – TACS Property Mapping\n")
     f.write("=" * 55 + "\n")

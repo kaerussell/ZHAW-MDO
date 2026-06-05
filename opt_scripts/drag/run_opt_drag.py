@@ -331,13 +331,30 @@ print(f"  N2-Diagram  : {os.path.join(OUTPUT_DIR, 'n2.html')}")
 
 output_file = os.path.join(OUTPUT_DIR, "results.txt")
 with open(output_file, "w") as f:
-    # Standard outputs
     old_stdout = sys.stdout
     sys.stdout = f
+
+    # Vollständige Modell-Outputs (wie gehabt)
     prob.model.list_outputs()
+
+    # --- ALLE Design-Variablen zwingend auflisten ---
+    print("\n" + "=" * 60)
+    print("ALLE DESIGN-VARIABLEN (vom Treiber registriert)")
+    print("=" * 60)
+    dv_meta = prob.model.get_design_vars(recurse=True)
+    for name in sorted(dv_meta):
+        val = prob.get_val(name)
+        arr = np.atleast_1d(val)
+        if arr.size == 1:
+            print(f"  {name:<35} {arr[0]: .6f}")
+        else:
+            print(f"  {name:<35} size={arr.size:<4}  "
+                  f"min={arr.min(): .4f}  max={arr.max(): .4f}  mean={arr.mean(): .4f}")
+    print("=" * 60)
+
     sys.stdout = old_stdout
-    
-    # Strukturdicken mit Namen
+
+    # Strukturdicken mit Namen (wie gehabt)
     f.write("\n" + "=" * 55 + "\n")
     f.write("STRUKTURDICKEN – TACS Property Mapping\n")
     f.write("=" * 55 + "\n")

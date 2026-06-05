@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(DIR, "..", "..", "input_files"))
 import tacs_setup
 
 # ----------------------- General ---------------------------- #
-maxiter = 10
+maxiter = 500
 
 VSP_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.vsp3")
 BDF_FILE = os.path.join(DIR, "..", "..", "input_files", "B737SB.bdf")
@@ -267,7 +267,7 @@ prob.model.add_design_var("aoa_maneuver", lower= 5.0, upper=12.0, scaler=1/AOA_M
 # prob.model.add_design_var("Wing:XSec_2:Span",  lower=5.0, upper=20.0, scaler=1.0/9.5)
 # prob.model.add_design_var("Wing:XSec_2:Sweep",  lower=0.0, upper=30.0, scaler=1.0/28)
 
-prob.model.add_objective("cruise.mass", scaler=1/1500.0) # 1/50 - 1/100 for addition, 1.0 for multiplication, 1/D_INIT for breguet
+prob.model.add_objective("cruise.mass", scaler=1/1000.0) # 1/50 - 1/100 for addition, 1.0 for multiplication, 1/D_INIT for breguet
 
 # Add constraints
 prob.model.add_constraint("aoa_total_man", upper=14.0, scaler=1/14.0) 
@@ -337,16 +337,33 @@ print("=" * 55)
 dvgeo_internal = prob.model.dvgeo.nom_getDVGeo()
 dvgeo_internal.writeVSPFile(os.path.join(OUTPUT_DIR, "comb_out.vsp3"))
 
-# Results in .txt file festhalten
+# Results .txt
 output_file = os.path.join(OUTPUT_DIR, "results.txt")
 with open(output_file, "w") as f:
-    # Standard outputs
     old_stdout = sys.stdout
     sys.stdout = f
+
+    # Vollständige Modell-Outputs (wie gehabt)
     prob.model.list_outputs()
+
+    # --- ALLE Design-Variablen zwingend auflisten ---
+    print("\n" + "=" * 60)
+    print("ALLE DESIGN-VARIABLEN (vom Treiber registriert)")
+    print("=" * 60)
+    dv_meta = prob.model.get_design_vars(recurse=True)
+    for name in sorted(dv_meta):
+        val = prob.get_val(name)
+        arr = np.atleast_1d(val)
+        if arr.size == 1:
+            print(f"  {name:<35} {arr[0]: .6f}")
+        else:
+            print(f"  {name:<35} size={arr.size:<4}  "
+                  f"min={arr.min(): .4f}  max={arr.max(): .4f}  mean={arr.mean(): .4f}")
+    print("=" * 60)
+
     sys.stdout = old_stdout
-    
-    # Strukturdicken mit Namen
+
+    # Strukturdicken mit Namen (wie gehabt)
     f.write("\n" + "=" * 55 + "\n")
     f.write("STRUKTURDICKEN – TACS Property Mapping\n")
     f.write("=" * 55 + "\n")
@@ -361,7 +378,7 @@ Total_L = prob.get_val('cruise.L')[0]
 Total_D = prob.get_val('cruise.D')[0]
 
 print("\n" + "=" * 65)
-print("OPTIMIERUNGSERGEBNIS  –  B737SB Cruise, Maneuver Mass-Drag-Combined ")
+print("OPTIMIERUNGSERGEBNIS  –  B737SB Baseline ")
 print("=" * 65)
 print(f"  Strukturmasse              : {prob.get_val('cruise.mass')[0]:>10.2f}  kg")
 print(f"  Auftriebskraft             : {prob.get_val('cruise.L')[0]:>10.2f}  N")
