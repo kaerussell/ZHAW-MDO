@@ -42,7 +42,6 @@ L_CRUISE   = W_GROSS    # Lift constraint
 L_MAN      = 2.5*W_GROSS    # Lift constraint
 S_REF      = 130        # m^2 (of B737-800)
 T_OVER_C   = 0.12
-M_REF      = 3500       # kg reference wing weight
 
 LD_TARGET = 30
 
